@@ -526,6 +526,18 @@ function statsCardHTML(meta) {
       </tr></thead>
       <tbody>${hazardRows}</tbody>
     </table>` : ""}
+    ${(s.hazard_examples || []).length ? `
+    <details class="mt-3">
+      <summary class="text-[12px] text-amber-400/90 cursor-pointer select-none hover:text-amber-300">📌 各危害代表案例（點開查證，召回編號可於 cpsc.gov 搜尋）</summary>
+      <div class="mt-2 space-y-1.5">
+        ${(s.hazard_examples || []).map((e) => `
+        <div class="text-[11.5px] leading-5 rounded-lg bg-[#101014] border border-[#26262b] px-3 py-2">
+          <span class="text-amber-400/90">${esc(e.hazard_type)}</span>
+          <span class="text-zinc-300"> ｜ ${esc(e.title)}</span>
+          <span class="text-zinc-500"> ｜ ${esc(e.year ?? "?")} 年 ｜ 編號 <span class="font-mono text-zinc-400">${esc(e.recall_no || "無")}</span> ｜ 事故 ${fmt(e.incident_count)}</span>
+        </div>`).join("")}
+      </div>
+    </details>` : ""}
     <div class="mt-2 text-[11px] text-zinc-600">統計為 SQL 全表聚合（非抽樣）｜引用來源 ${srcCount} 份（含條款與案例）</div>
   </div>`;
 }
