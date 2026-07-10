@@ -111,6 +111,7 @@ tailwind.config = {
     <div id="login-msg" class="h-5 mt-2 text-[12.5px] text-red-400"></div>
     <button id="login-submit" class="w-full mt-3 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:bg-[#26262b] disabled:text-zinc-600 text-black font-bold py-3 transition-colors">解鎖進入</button>
     <div class="text-center text-[11px] text-zinc-600 mt-4">驗證於伺服器端進行｜5 次失敗將封鎖 IP 15 分鐘</div>
+    <button id="login-api-btn" class="w-full text-center text-[11px] text-zinc-500 hover:text-amber-400 mt-2 transition-colors">⚙ 修改 API 端點（<span id="login-api-host" class="font-mono"></span>）</button>
   </div>
 </div>
 
@@ -353,6 +354,23 @@ els.loginPw.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); doLogin(); }
 });
 $("btn-logout").addEventListener("click", () => showLogin("已登出，請重新輸入密碼。"));
+
+// 登入卡上的 API 端點設定（解決「未登入無法點 ⚙」的死鎖）
+function refreshLoginApiHost() {
+  try { $("login-api-host").textContent = new URL(state.apiBase).host; }
+  catch { $("login-api-host").textContent = "未設定"; }
+}
+$("login-api-btn").addEventListener("click", () => {
+  const v = window.prompt("後端 API 端點（不含路徑）：", state.apiBase);
+  if (v && v.trim()) {
+    state.apiBase = v.trim().replace(/\/+$/, "");
+    store.set("napli_api", state.apiBase);
+    refreshLoginApiHost();
+    els.loginMsg.textContent = "API 端點已更新，請重新嘗試登入。";
+    checkHealth();
+  }
+});
+refreshLoginApiHost();
 
 // ---------------------------------------------------------------------------
 // 3. Markdown 渲染
