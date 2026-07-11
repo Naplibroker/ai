@@ -486,7 +486,7 @@ function statsCardHTML(meta) {
   if (meta.intent?.hazard_type) chips.push(`危害焦點：${esc(meta.intent.hazard_type)}`);
   chips.push(`範圍：${esc(s.scope?.country || "全部來源")}`);
 
-  const hazardRows = (s.hazard_breakdown || []).slice(0, 6).map((h) => `
+  const hazardRows = (s.hazard_breakdown || []).slice(0, 10).map((h) => `
     <tr>
       <td class="py-1 pr-3 text-zinc-300">${esc(h.hazard_type)}</td>
       <td class="py-1 pr-3 text-right font-mono">${fmt(h.cases)}</td>
@@ -502,6 +502,14 @@ function statsCardHTML(meta) {
       <span class="text-[12px] font-bold text-amber-400 tracking-wide">📊 全量大數據掃描</span>
       ${chips.map((c) => `<span class="text-[11px] rounded-full border border-[#33332a] bg-[#1b1b16] px-2 py-0.5 text-zinc-400">${c}</span>`).join("")}
     </div>
+    ${(s.source_breakdown || []).length ? `
+    <div class="flex flex-wrap gap-1.5 mb-3">
+      ${(s.source_breakdown || []).map((b) => `
+      <span class="text-[11px] rounded-md border border-[#2e2e36] bg-[#101014] px-2 py-1 text-zinc-400">
+        <span class="text-amber-400/90 font-mono">${esc(b.data_source)}</span> ${fmt(b.cases)} 件
+        <span class="text-zinc-600">（${esc(b.year_min ?? "?")}–${esc(b.year_max ?? "?")}）</span>
+      </span>`).join("")}
+    </div>` : ""}
     <div class="grid grid-cols-3 gap-3 mb-3">
       <div class="rounded-lg bg-[#101014] border border-[#26262b] p-3 text-center">
         <div class="font-mono text-xl font-bold text-amber-400">${fmt(o.total_cases)}</div>
@@ -534,7 +542,7 @@ function statsCardHTML(meta) {
         <div class="text-[11.5px] leading-5 rounded-lg bg-[#101014] border border-[#26262b] px-3 py-2">
           <span class="text-amber-400/90">${esc(e.hazard_type)}</span>
           <span class="text-zinc-300"> ｜ ${esc(e.title)}</span>
-          <span class="text-zinc-500"> ｜ ${esc(e.year ?? "?")} 年 ｜ 編號 <span class="font-mono text-zinc-400">${esc(e.recall_no || "無")}</span> ｜ 事故 ${fmt(e.incident_count)}</span>
+          <span class="text-zinc-500"> ｜ ${esc(e.country ?? "?")} ｜ ${esc(e.year ?? "?")} 年 ｜ 編號 <span class="font-mono text-zinc-400">${esc(e.recall_no || "無")}</span> ｜ 事故 ${fmt(e.incident_count)}</span>
         </div>`).join("")}
       </div>
     </details>` : ""}
