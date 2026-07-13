@@ -110,8 +110,10 @@ tailwind.config = {
       class="w-full rounded-xl border border-[#2e2e36] bg-[#0f0f13] px-4 py-3 text-[15px] outline-none focus:border-amber-500/60 transition-colors" />
     <div id="login-msg" class="h-5 mt-2 text-[12.5px] text-red-400"></div>
     <button id="login-submit" class="w-full mt-3 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:bg-[#26262b] disabled:text-zinc-600 text-black font-bold py-3 transition-colors">解鎖進入</button>
-    <div class="text-center text-[11px] text-zinc-600 mt-4">驗證於伺服器端進行｜5 次失敗將封鎖 IP 15 分鐘</div>
-    <button id="login-api-btn" class="w-full text-center text-[11px] text-zinc-500 hover:text-amber-400 mt-2 transition-colors">⚙ 修改 API 端點（<span id="login-api-host" class="font-mono"></span>）</button>
+    <div class="flex items-center justify-between mt-5 text-[11px] text-zinc-600">
+      <span>🔒 伺服器端驗證｜5 次失敗封鎖 15 分鐘</span>
+      <button id="login-api-btn" class="text-zinc-600 hover:text-amber-400 transition-colors">⚙ 連線設定</button>
+    </div>
   </div>
 </div>
 
@@ -143,7 +145,10 @@ tailwind.config = {
         <span id="api-label" class="font-mono truncate">連線檢查中…</span>
       </div>
       <div>資料庫：D1 全量統計 × Vectorize 條款檢索</div>
-      <button id="btn-logout" class="text-zinc-500 hover:text-red-400 transition-colors">⏻ 登出（清除本機 Token）</button>
+      <div class="flex items-center justify-between">
+        <button id="btn-logout" class="text-zinc-500 hover:text-red-400 transition-colors">⏻ 登出</button>
+        <button id="btn-clear-all" class="text-zinc-600 hover:text-red-400 transition-colors">🗑 清空對話</button>
+      </div>
     </div>
   </aside>
 
@@ -233,7 +238,9 @@ const store = (() => {
     },
     set(k, v) {
       const s = JSON.stringify(v);
-      try { if (ok) localStorage.setItem(k, s); else mem.set(k, s); } catch { mem.set(k, s); }
+      if (!ok) { mem.set(k, s); return true; }           // 無 localStorage 環境：盡力而為
+      try { localStorage.setItem(k, s); return true; }
+      catch { mem.set(k, s); return false; }             // 空間滿：回報失敗讓上層淘汰重試
     },
     del(k) { try { if (ok) localStorage.removeItem(k); } catch {} mem.delete(k); },
   };
@@ -354,23 +361,24 @@ els.loginPw.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); doLogin(); }
 });
 $("btn-logout").addEventListener("click", () => showLogin("已登出，請重新輸入密碼。"));
+$("btn-clear-all").addEventListener("click", () => {
+  if (state.streaming) return;
+  if (window.confirm("確定清空所有對話紀錄？此動作無法復原。")) {
+    state.conversations = [];
+    newConversation();
+  }
+});
 
-// 登入卡上的 API 端點設定（解決「未登入無法點 ⚙」的死鎖）
-function refreshLoginApiHost() {
-  try { $("login-api-host").textContent = new URL(state.apiBase).host; }
-  catch { $("login-api-host").textContent = "未設定"; }
-}
+// 登入卡上的連線設定（解決「未登入無法點 ⚙」的死鎖；不在畫面顯示端點）
 $("login-api-btn").addEventListener("click", () => {
   const v = window.prompt("後端 API 端點（不含路徑）：", state.apiBase);
   if (v && v.trim()) {
     state.apiBase = v.trim().replace(/\/+$/, "");
     store.set("napli_api", state.apiBase);
-    refreshLoginApiHost();
-    els.loginMsg.textContent = "API 端點已更新，請重新嘗試登入。";
+    els.loginMsg.textContent = "連線設定已更新，請重新嘗試登入。";
     checkHealth();
   }
 });
-refreshLoginApiHost();
 
 // ---------------------------------------------------------------------------
 // 3. Markdown 渲染
@@ -384,11 +392,24 @@ function highlightIn(el) {
 // ---------------------------------------------------------------------------
 // 4. 對話持久化與側欄
 // ---------------------------------------------------------------------------
-function persist() { store.set("napli_convs", state.conversations); }
+let quotaWarned = false;
+function persist() {
+  if (state.conversations.length > 40) state.conversations.length = 40;  // 上限 40 個對話
+  for (let tries = 0; tries < 8; tries++) {
+    if (store.set("napli_convs", state.conversations)) return;
+    if (state.conversations.length <= 1) break;
+    state.conversations.pop();                            // 淘汰最舊，騰出空間
+    if (!quotaWarned) {
+      quotaWarned = true;
+      alert("瀏覽器儲存空間已滿，已自動移除最舊的對話以保留最新紀錄。");
+      renderSidebar();
+    }
+  }
+}
 function activeConv() { return state.conversations.find((c) => c.id === state.activeId) || null; }
 
 function newConversation() {
-  const conv = { id: "c" + Date.now().toString(36), title: "新對話", messages: [] };
+  const conv = { id: "c" + Date.now().toString(36), title: "新對話", messages: [], ts: Date.now() };
   state.conversations.unshift(conv);
   state.activeId = conv.id;
   persist(); renderSidebar(); renderChat();
@@ -403,6 +424,7 @@ function renderSidebar() {
     const label = document.createElement("span");
     label.className = "flex-1 truncate";
     label.textContent = c.title;
+    if (c.ts) item.title = "建立於 " + new Date(c.ts).toLocaleString("zh-TW");
     const del = document.createElement("button");
     del.className = "opacity-0 group-hover:opacity-100 text-zinc-600 hover:text-red-400 px-1 transition-opacity";
     del.textContent = "✕";
@@ -645,7 +667,7 @@ async function sendMessage(text) {
   const reportEl = block.querySelector(".report");
   const statsSlot = block.querySelector(".stats-slot");
   const loading = block.querySelector(".loading-dots");
-  let raw = "", statsHTML = "", renderQueued = false, firstToken = true;
+  let raw = "", lastMeta = null, renderQueued = false, firstToken = true;
 
   const scheduleRender = () => {
     if (renderQueued) return;
@@ -666,8 +688,8 @@ async function sendMessage(text) {
     await streamChat({
       message: text, history, signal: state.abort.signal,
       onMeta: (meta) => {
-        statsHTML = statsCardHTML(meta);
-        statsSlot.innerHTML = statsHTML;
+        lastMeta = meta;
+        statsSlot.innerHTML = statsCardHTML(meta);
         autoScroll();
       },
       onDelta: (t) => {
@@ -693,7 +715,7 @@ async function sendMessage(text) {
     loading?.remove();
     setStreamingUI(false);
     state.abort = null;
-    conv.messages.push({ role: "assistant", content: raw, statsHTML });
+    conv.messages.push({ role: "assistant", content: raw, meta: lastMeta });
     persist();
     attachCopyButton(block, () => raw);
     scheduleRender();
@@ -721,7 +743,8 @@ function renderChat() {
       const reportEl = block.querySelector(".report");
       reportEl.classList.remove("caret");
       reportEl.innerHTML = renderMD(m.content);
-      if (m.statsHTML) block.querySelector(".stats-slot").innerHTML = m.statsHTML;
+      const statsHtml = m.meta ? statsCardHTML(m.meta) : (m.statsHTML || "");
+      if (statsHtml) block.querySelector(".stats-slot").innerHTML = statsHtml;
       highlightIn(reportEl);
       attachCopyButton(block, () => m.content);
       els.chat.appendChild(block);
